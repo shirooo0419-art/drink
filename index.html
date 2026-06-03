@@ -421,7 +421,7 @@ async function handlePhoto(input) {
 
   try {
     const b64 = await toBase64(file);
-    // 使用 1.5-flash 模型
+    // 這裡我們維持用 2.5-flash 模型
     const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${getApiKey()}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -429,16 +429,30 @@ async function handlePhoto(input) {
         contents: [{
           parts: [
             { inline_data: { mime_type: file.type, data: b64 } },
-            { text: '這是一杯飲料的標籤照片。請從中辨識並以JSON格式回傳：{"name":"品名","shop":"店名","price":"數字字串","sugar":"甜度(無糖/少糖/半糖/七分糖/全糖/不確定)","ice":"冰塊(去冰/少冰/正常冰/多冰/熱/不確定)","note":"其他備註"}。若辨識不到某欄位，填空字串。只輸出JSON，不要任何其他文字或markdown。' }
+            // 提示詞微調：明確請它單行輸出，不要換行
+            { text: '這是一杯飲料的標籤照片。請從中辨識並以JSON格式回傳：{"name":"品名","shop":"店名","price":"數字字串","sugar":"甜度(無糖/少糖/半糖/七分糖/全糖/不確定)","ice":"冰塊(去冰/少冰/正常冰/多冰/熱/不確定)","note":"其他備註(請單行輸出，絕對不要換行)"}。若辨識不到某欄位，填空字串。只輸出JSON，不要任何其他文字或markdown。' }
           ]
         }],
-        generationConfig: { maxOutputTokens: 500, temperature: 0 }
+        generationConfig: { 
+          maxOutputTokens: 500, 
+          temperature: 0,
+          // 加上這行殺手鐧：強制 Google 回傳絕對標準不報錯的 JSON 格式
+          response_mime_type: "application/json" 
+        }
       })
     });
+    
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message);
-    const text = data.candidates[0].content.parts[0].text.trim();
-    const json = JSON.parse(text.replace(/```json|```/g,'').trim());
+    
+    // 取得 AI 回傳的純文字
+    let text = data.candidates[0].content.parts[0].text.trim();
+    
+    // 多加一層防護：把 markdown 標記和意外的真實換行符號用「空白」取代掉
+    text = text.replace(/```json/g, '').replace(/```/g, '');
+    text = text.replace(/[\r\n]+/g, ' '); 
+
+    const json = JSON.parse(text);
     fillForm(json);
     resultEl.innerHTML = `✅ 辨識完成！已自動填入欄位`;
   } catch (e) {
@@ -446,7 +460,6 @@ async function handlePhoto(input) {
     console.error(e);
   }
 }
-
 function toBase64(file) {
   return new Promise((res, rej) => {
     const r = new FileReader();
