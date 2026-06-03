@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="飲料記錄">
+<title>🧋 飲料記錄</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #faf9f7;
+    --card: #ffffff;
+    --border: #e8e4de;
+    --text: #1a1a1a;
+    --muted: #888;
+    --accent: #c27c3e;
+    --accent-bg: #fdf4ea;
+    --danger: #d94f4f;
+    --success: #3a8c5c;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --card: #252522;
+      --border: #3a3a36;
+      --text: #f0ede8;
+      --muted: #888;
+      --accent: #e09050;
+      --accent-bg: #2e2318;
+    }
+  }
+  body { font-family: -apple-system, 'PingFang TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .header { background: var(--card); border-bottom: 1px solid var(--border); padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header-nav { display: flex; gap: 8px; }
+  .nav-btn { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .nav-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .view { display: none; padding: 20px; }
+  .view.active { display: block; }
+
+  /* Calendar */
+  .month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .month-nav button { background: none; border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px; font-size: 16px; color: var(--text); cursor: pointer; }
+  .month-title { font-size: 18px; font-weight: 600; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-day-label { text-align: center; font-size: 11px; color: var(--muted); padding: 4px 0; font-weight: 500; }
+  .cal-cell { aspect-ratio: 1; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border: 1px solid transparent; background: var(--card); font-size: 13px; font-weight: 500; position: relative; gap: 2px; }
+  .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; }
+  .cal-cell.today { border-color: var(--accent); color: var(--accent); }
+  .cal-cell.has-drink { background: var(--accent-bg); border-color: var(--accent); }
+  .cal-cell.has-drink .drink-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  .cal-cell.no-drink { background: var(--card); }
+  .cal-cell.future { opacity: 0.35; cursor: default; }
+
+  .month-summary { margin-top: 20px; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; text-align: center; }
+  .summary-item .val { font-size: 22px; font-weight: 600; color: var(--accent); }
+  .summary-item .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* List view */
+  .day-group { margin-bottom: 20px; }
+  .day-group-title { font-size: 13px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
+  .drink-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .drink-icon { width: 42px; height: 42px; border-radius: 10px; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .drink-info { flex: 1; min-width: 0; }
+  .drink-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .drink-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .drink-price { font-size: 16px; font-weight: 600; color: var(--accent); white-space: nowrap; }
+  .drink-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px; }
+  .drink-del:hover { color: var(--danger); }
+
+  /* Add view */
+  .add-section { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+  .add-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 32px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+  .upload-zone:hover { border-color: var(--accent); }
+  .upload-zone.dragging { border-color: var(--accent); background: var(--accent-bg); }
+  .upload-zone .icon { font-size: 40px; margin-bottom: 10px; }
+  .upload-zone p { font-size: 14px; color: var(--muted); }
+  .upload-zone strong { color: var(--accent); }
+  #fileInput { display: none; }
+  .preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: 10px; margin-bottom: 14px; }
+  .ai-result { background: var(--accent-bg); border-radius: 10px; padding: 14px; margin-bottom: 14px; font-size: 13px; color: var(--muted); border: 1px solid var(--border); }
+  .ai-result.loading { text-align: center; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .form-row { margin-bottom: 12px; }
+  .form-row label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 5px; }
+  .form-row input, .form-row select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 15px; font-family: inherit; }
+  .form-row input:focus, .form-row select:focus { outline: none; border-color: var(--accent); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+
+  .btn-primary { width: 100%; padding: 14px; background: var(--accent); color: white; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .btn-primary:active { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-outline { width: 100%; padding: 12px; background: none; color: var(--text); border: 1px solid var(--border); border-radius: 12px; font-size: 15px; cursor: pointer; margin-top: 8px; }
+
+  /* Day detail modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: flex-end; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 20px 20px 0 0; padding: 24px 20px; width: 100%; max-width: 500px; max-height: 80vh; overflow-y: auto; }
+  .modal-handle { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 0 auto 18px; }
+  .modal h2 { font-size: 17px; font-weight: 600; margin-bottom: 16px; }
+  .modal-close { float: right; background: none; border: none; font-size: 22px; color: var(--muted); cursor: pointer; line-height: 1; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-state .big { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; }
+
+  .tag { display: inline-block; background: var(--accent-bg); color: var(--accent); border-radius: 6px; padding: 2px 8px; font-size: 12px; margin-right: 4px; margin-top: 4px; }
+
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; padding: 8px 0 env(safe-area-inset-bottom, 8px); }
+  .bnav-btn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: none; cursor: pointer; padding: 8px 0; font-size: 10px; color: var(--muted); }
+  .bnav-btn.active { color: var(--accent); }
+  .bnav-btn .icon { font-size: 22px; line-height: 1; }
+  main { padding-bottom: 80px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🧋 飲料記錄</h1>
+  <span id="monthLabel" style="font-size:14px;color:var(--muted)"></span>
+</div>
+
+<main>
+  <div class="view active" id="view-calendar">
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <span class="month-title" id="calTitle"></span>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="month-summary" id="monthSummary"></div>
+  </div>
+
+  <div class="view" id="view-list">
+    <div id="listContent"></div>
+  </div>
+
+  <div class="view" id="view-add">
+    <div class="add-section">
+      <h3>📷 拍照辨識標籤</h3>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📸</div>
+        <p><strong>點擊上傳</strong>或拖曳照片</p>
+        <p style="margin-top:4px;font-size:12px">支援手機直接拍照</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handlePhoto(this)">
+      <img id="previewImg" class="preview-img" style="display:none">
+      <div class="ai-result" id="aiResult" style="display:none"></div>
+    </div>
+
+    <div class="add-section">
+      <h3>✏️ 飲料資訊</h3>
+      <div class="form-row">
+        <label>品名</label>
+        <input type="text" id="f_name" placeholder="醇濃可可拿鐵">
+      </div>
+      <div class="form-row">
+        <label>店家</label>
+        <input type="text" id="f_shop" placeholder="有飲台北伊通店">
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0">
+          <label>甜度</label>
+          <select id="f_sugar">
+            <option value="">未指定</option>
+            <option value="無糖">無糖</option>
+            <option value="少糖">少糖</option>
+            <option value="半糖">半糖</option>
+            <option value="七分糖">七分糖</option>
+            <option value="全糖">全糖</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin:0">
+          <label>冰塊</label>
+          <select id="f_ice">
+            <option value="">未指定</option>
+            <option value="去冰">去冰</option>
+            <option value="少冰">少冰</option>
+            <option value="正常冰">正常冰</option>
+            <option value="多冰">多冰</option>
+            <option value="熱">熱</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row" style="margin:0">
+          <label>價格（NT$）</label>
+          <input type="number" id="f_price" placeholder="88">
+        </div>
+        <div class="form-row" style="margin:0">
+          <label>日期</label>
+          <input type="date" id="f_date">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>備註</label>
+        <input type="text" id="f_note" placeholder="好喝！下次再來">
+      </div>
+      <button class="btn-primary" onclick="addDrink()">記錄這杯飲料 ☕</button>
+      <button class="btn-outline" onclick="clearForm()">清除</button>
+    </div>
+  </div>
+
+  <div class="view" id="view-settings">
+    <div class="add-section">
+      <h3>🔑 Gemini API 設定</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:12px">請在此輸入 API Key 以啟用拍照辨識。<br>金鑰僅儲存在您的瀏覽器本地端，安全無虞。</p>
+      <div class="form-row">
+        <label>API Key</label>
+        <input type="password" id="settingsKeyInput" placeholder="請貼上金鑰...">
+      </div>
+      <button class="btn-primary" onclick="saveApiKeyFromSettings()">💾 儲存設定</button>
+    </div>
+    <div class="add-section" style="margin-top:16px">
+      <h3>資料管理</h3>
+      <button class="btn-outline" onclick="exportData()">📤 匯出資料（JSON）</button>
+      <button class="btn-outline" style="margin-top:8px; color: var(--danger); border-color: var(--danger);" onclick="if(confirm('確定要清除所有資料？'))clearAll()">🗑️ 清除所有資料</button>
+    </div>
+  </div>
+</main>
+
+<nav class="bottom-nav">
+  <button class="bnav-btn active" id="bnav-calendar" onclick="switchView('calendar')">
+    <span class="icon">📅</span>月曆
+  </button>
+  <button class="bnav-btn" id="bnav-list" onclick="switchView('list')">
+    <span class="icon">📋</span>清單
+  </button>
+  <button class="bnav-btn" id="bnav-add" onclick="switchView('add')">
+    <span class="icon">➕</span>記錄
+  </button>
+  <button class="bnav-btn" id="bnav-settings" onclick="switchView('settings')">
+    <span class="icon">⚙️</span>設定
+  </button>
+</nav>
+
+<div class="modal-overlay" id="dayModal" onclick="closeDayModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <button class="modal-close" onclick="closeDayModal()">×</button>
+    <h2 id="modalTitle"></h2>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+let drinks = JSON.parse(localStorage.getItem('drinks') || '[]');
+let currentMonth = new Date();
+currentMonth.setDate(1);
+
+function saveDrinks() { localStorage.setItem('drinks', JSON.stringify(drinks)); }
+
+// ---- API Key 管理 ----
+function getApiKey() { 
+  return localStorage.getItem('gemini_api_key') || ''; 
+}
+
+function saveApiKeyFromSettings() { 
+  const key = document.getElementById('settingsKeyInput').value.trim();
+  if (key) {
+    localStorage.setItem('gemini_api_key', key);
+    alert('✅ API Key 已安全儲存於本地！');
+  } else {
+    localStorage.removeItem('gemini_api_key');
+    alert('🗑️ API Key 已清除！');
+  }
+}
+
+function switchView(v) {
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.bnav-btn').forEach(x => x.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  document.getElementById('bnav-' + v).classList.add('active');
+  if (v === 'calendar') renderCalendar();
+  if (v === 'list') renderList();
+}
+
+// ---- CALENDAR ----
+function changeMonth(d) {
+  currentMonth.setMonth(currentMonth.getMonth() + d);
+  renderCalendar();
+}
+function renderCalendar() {
+  const y = currentMonth.getFullYear(), m = currentMonth.getMonth();
+  document.getElementById('calTitle').textContent = y + ' 年 ' + (m+1) + ' 月';
+  document.getElementById('monthLabel').textContent = (m+1) + '月';
+
+  const first = new Date(y, m, 1).getDay();
+  const days = new Date(y, m+1, 0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // build date→drinks map
+  const map = {};
+  drinks.forEach(d => {
+    const k = d.date;
+    if (!map[k]) map[k] = [];
+    map[k].push(d);
+  });
+
+  const labels = ['日','一','二','三','四','五','六'];
+  let html = labels.map(l => `<div class="cal-day-label">${l}</div>`).join('');
+
+  for (let i = 0; i < first; i++) html += `<div class="cal-cell empty"></div>`;
+  for (let d = 1; d <= days; d++) {
+    const dateStr = y + '-' + String(m+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const cellDate = new Date(y, m, d);
+    const isToday = cellDate.getTime() === today.getTime();
+    const isFuture = cellDate > today;
+    const hasDrink = map[dateStr] && map[dateStr].length > 0;
+    let cls = 'cal-cell';
+    if (isToday) cls += ' today';
+    if (hasDrink) cls += ' has-drink';
+    if (isFuture) cls += ' future';
+    const dot = hasDrink ? '<div class="drink-dot"></div>' : '';
+    const onclick = isFuture ? '' : `onclick="showDay('${dateStr}')"`;
+    html += `<div class="${cls}" ${onclick}>${d}${dot}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML = html;
+
+  // summary
+  const monthDrinks = drinks.filter(d => d.date.startsWith(y+'-'+String(m+1).padStart(2,'0')));
+  const total = monthDrinks.reduce((s, d) => s + (parseFloat(d.price) || 0), 0);
+  const days2 = [...new Set(monthDrinks.map(d => d.date))].length;
+  document.getElementById('monthSummary').innerHTML = `
+    <div class="summary-item"><div class="val">${monthDrinks.length}</div><div class="lbl">杯</div></div>
+    <div class="summary-item"><div class="val">${days2}</div><div class="lbl">天</div></div>
+    <div class="summary-item"><div class="val">$${total}</div><div class="lbl">總花費</div></div>
+  `;
+}
+
+function showDay(dateStr) {
+  const dayDrinks = drinks.filter(d => d.date === dateStr);
+  document.getElementById('modalTitle').textContent = dateStr + (dayDrinks.length ? ' 🧋' : '');
+  if (!dayDrinks.length) {
+    document.getElementById('modalContent').innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">這天沒有記錄</p>';
+  } else {
+    document.getElementById('modalContent').innerHTML = dayDrinks.map(d => drinkCardHTML(d, true)).join('');
+  }
+  document.getElementById('dayModal').classList.add('open');
+}
+function closeDayModal(e) {
+  if (!e || e.target === document.getElementById('dayModal')) {
+    document.getElementById('dayModal').classList.remove('open');
+    renderCalendar();
+  }
+}
+
+// ---- LIST ----
+function renderList() {
+  const sorted = [...drinks].sort((a,b) => b.date.localeCompare(a.date));
+  if (!sorted.length) {
+    document.getElementById('listContent').innerHTML = `<div class="empty-state"><div class="big">🧋</div><p>還沒有記錄<br>點下方 ➕ 開始記錄</p></div>`;
+    return;
+  }
+  const groups = {};
+  sorted.forEach(d => { if (!groups[d.date]) groups[d.date] = []; groups[d.date].push(d); });
+  let html = '';
+  for (const [date, items] of Object.entries(groups)) {
+    const total = items.reduce((s, d) => s + (parseFloat(d.price)||0), 0);
+    html += `<div class="day-group"><div class="day-group-title">${date} · ${items.length}杯 · $${total}</div>`;
+    items.forEach(d => html += drinkCardHTML(d, false));
+    html += '</div>';
+  }
+  document.getElementById('listContent').innerHTML = html;
+}
+
+function drinkCardHTML(d, inModal) {
+  const tags = [d.sugar, d.ice].filter(Boolean).map(t => `<span class="tag">${t}</span>`).join('');
+  return `<div class="drink-card">
+    <div class="drink-icon">🧋</div>
+    <div class="drink-info">
+      <div class="drink-name">${d.name || '未命名飲料'}</div>
+      <div class="drink-meta">${d.shop || ''}</div>
+      <div>${tags}</div>
+      ${d.note ? `<div style="font-size:12px;color:var(--muted);margin-top:3px">${d.note}</div>` : ''}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      ${d.price ? `<div class="drink-price">$${d.price}</div>` : ''}
+      <button class="drink-del" onclick="deleteDrink('${d.id}')">🗑</button>
+    </div>
+  </div>`;
+}
+
+function deleteDrink(id) {
+  if (!confirm('刪除這筆記錄？')) return;
+  drinks = drinks.filter(d => d.id !== id);
+  saveDrinks();
+  renderList();
+  renderCalendar();
+  const m = document.getElementById('dayModal');
+  if (m.classList.contains('open')) {
+    const title = document.getElementById('modalTitle').textContent;
+    const date = title.split(' ')[0];
+    showDay(date);
+  }
+}
+
+// ---- PHOTO / AI ----
+async function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = document.getElementById('previewImg');
+  img.src = url; img.style.display = 'block';
+
+  const resultEl = document.getElementById('aiResult');
+  resultEl.style.display = 'block';
+
+  if (!getApiKey()) {
+    resultEl.innerHTML = '⚠️ 請先至下方的「⚙️設定」頁面輸入 API Key';
+    return;
+  }
+  resultEl.innerHTML = '<span class="spinner"></span> AI 正在辨識標籤…';
+
+  try {
+    const b64 = await toBase64(file);
+    // 使用 1.5-flash 模型
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${getApiKey()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: file.type, data: b64 } },
+            { text: '這是一杯飲料的標籤照片。請從中辨識並以JSON格式回傳：{"name":"品名","shop":"店名","price":"數字字串","sugar":"甜度(無糖/少糖/半糖/七分糖/全糖/不確定)","ice":"冰塊(去冰/少冰/正常冰/多冰/熱/不確定)","note":"其他備註"}。若辨識不到某欄位，填空字串。只輸出JSON，不要任何其他文字或markdown。' }
+          ]
+        }],
+        generationConfig: { maxOutputTokens: 500, temperature: 0 }
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.candidates[0].content.parts[0].text.trim();
+    const json = JSON.parse(text.replace(/```json|```/g,'').trim());
+    fillForm(json);
+    resultEl.innerHTML = `✅ 辨識完成！已自動填入欄位`;
+  } catch (e) {
+    resultEl.innerHTML = '❌ 辨識失敗，請手動填寫。錯誤：' + e.message;
+    console.error(e);
+  }
+}
+
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function fillForm(data) {
+  if (data.name) document.getElementById('f_name').value = data.name;
+  if (data.shop) document.getElementById('f_shop').value = data.shop;
+  if (data.price) document.getElementById('f_price').value = data.price;
+  if (data.note) document.getElementById('f_note').value = data.note;
+  const sugarEl = document.getElementById('f_sugar');
+  const iceEl = document.getElementById('f_ice');
+  if (data.sugar) { for (let o of sugarEl.options) if (o.value === data.sugar) { sugarEl.value = data.sugar; break; } }
+  if (data.ice) { for (let o of iceEl.options) if (o.value === data.ice) { iceEl.value = data.ice; break; } }
+}
+
+function addDrink() {
+  const name = document.getElementById('f_name').value.trim();
+  if (!name) { alert('請輸入品名'); return; }
+  const d = {
+    id: Date.now().toString(),
+    name, shop: document.getElementById('f_shop').value.trim(),
+    price: document.getElementById('f_price').value.trim(),
+    sugar: document.getElementById('f_sugar').value,
+    ice: document.getElementById('f_ice').value,
+    date: document.getElementById('f_date').value,
+    note: document.getElementById('f_note').value.trim()
+  };
+  if (!d.date) { alert('請選擇日期'); return; }
+  drinks.push(d);
+  saveDrinks();
+  clearForm();
+  alert('✅ 已記錄！');
+  switchView('calendar');
+}
+
+function clearForm() {
+  ['f_name','f_shop','f_price','f_note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f_sugar').value = '';
+  document.getElementById('f_ice').value = '';
+  document.getElementById('previewImg').style.display = 'none';
+  document.getElementById('aiResult').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(drinks, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'drinks-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+function clearAll() { drinks = []; saveDrinks(); renderCalendar(); renderList(); alert('已清除'); }
+
+// drag-drop upload
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragging'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragging'); const f = e.dataTransfer.files[0]; if (f) { const inp = document.getElementById('fileInput'); const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; handlePhoto(inp); } });
+
+// init
+document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+document.getElementById('settingsKeyInput').value = getApiKey(); // 載入儲存的 Key
+renderCalendar();
+</script>
+</body>
+</html>
