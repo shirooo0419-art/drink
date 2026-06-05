@@ -338,6 +338,7 @@ function renderCalendar() {
 }
 
 function showDay(dateStr) {
+  // 修改：將點擊的日期同步到新增表單中
   document.getElementById('f_date').value = dateStr;
 
   const dayDrinks = drinks.filter(d => d.date === dateStr);
@@ -349,6 +350,11 @@ function showDay(dateStr) {
   }
   document.getElementById('dayModal').classList.add('open');
 }
+function closeDayModal(e) {
+  if (!e || e.target === document.getElementById('dayModal')) {
+    document.getElementById('dayModal').classList.remove('open');
+    renderCalendar();
+  }
 }
 
 // ---- LIST ----
@@ -427,13 +433,12 @@ async function handlePhoto(input) {
         contents: [{
           parts: [
             { inline_data: { mime_type: file.type, data: b64 } },
-            // 提示詞終極強化：嚴禁使用雙引號、禁止換行
             { text: '這是一杯飲料標籤。請辨識並以JSON格式回傳：{"name":"品名","shop":"店名","price":"價格數字","sugar":"甜度","ice":"冰塊","note":"備註"}。注意：備註欄位請將所有多餘資訊(包含特殊符號、括號、電話)整理成單行純文字，**絕對不准在內容中使用任何「引號」或「換行符號」**，若無資料填空字串。' }
           ]
         }],
         generationConfig: { 
           response_mime_type: "application/json",
-          temperature: 0.1 // 降低 AI 的發散性，讓它乖乖聽話
+          temperature: 0.1 
         }
       })
     });
@@ -442,14 +447,9 @@ async function handlePhoto(input) {
     if (data.error) throw new Error(data.error.message);
     
     let text = data.candidates[0].content.parts[0].text;
-    
-    // 暴力提取：只抓大括號 { } 裡面的內容，忽略 AI 廢話
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("AI 回傳的格式不對");
-    
-    // 把隱形的換行跟 Tab 全部壓平
     let cleanJson = match[0].replace(/[\r\n\t]+/g, ' '); 
-    
     const json = JSON.parse(cleanJson);
     fillForm(json);
     resultEl.innerHTML = `✅ 辨識完成！`;
@@ -506,6 +506,7 @@ function clearForm() {
   document.getElementById('aiResult').style.display = 'none';
   document.getElementById('fileInput').value = '';
 
+  // 修改：記錄完成後，將日期自動重置回今天
   const tzOffset = new Date().getTimezoneOffset() * 60000;
   document.getElementById('f_date').value = new Date(Date.now() - tzOffset).toISOString().slice(0,10);
 }
@@ -526,9 +527,13 @@ zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
 zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragging'); const f = e.dataTransfer.files[0]; if (f) { const inp = document.getElementById('fileInput'); const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; handlePhoto(inp); } });
 
 // init
-document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+// 修改：取得正確的本地時間（解決 UTC 時區誤差）
+const tzOffsetInit = new Date().getTimezoneOffset() * 60000;
+document.getElementById('f_date').value = new Date(Date.now() - tzOffsetInit).toISOString().slice(0,10);
+
 document.getElementById('settingsKeyInput').value = getApiKey(); // 載入儲存的 Key
 renderCalendar();
 </script>
+
 </body>
 </html>
