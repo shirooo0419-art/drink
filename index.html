@@ -338,6 +338,8 @@ function renderCalendar() {
 }
 
 function showDay(dateStr) {
+  document.getElementById('f_date').value = dateStr;
+
   const dayDrinks = drinks.filter(d => d.date === dateStr);
   document.getElementById('modalTitle').textContent = dateStr + (dayDrinks.length ? ' 🧋' : '');
   if (!dayDrinks.length) {
@@ -347,11 +349,6 @@ function showDay(dateStr) {
   }
   document.getElementById('dayModal').classList.add('open');
 }
-function closeDayModal(e) {
-  if (!e || e.target === document.getElementById('dayModal')) {
-    document.getElementById('dayModal').classList.remove('open');
-    renderCalendar();
-  }
 }
 
 // ---- LIST ----
@@ -508,6 +505,9 @@ function clearForm() {
   document.getElementById('previewImg').style.display = 'none';
   document.getElementById('aiResult').style.display = 'none';
   document.getElementById('fileInput').value = '';
+
+  const tzOffset = new Date().getTimezoneOffset() * 60000;
+  document.getElementById('f_date').value = new Date(Date.now() - tzOffset).toISOString().slice(0,10);
 }
 
 function exportData() {
